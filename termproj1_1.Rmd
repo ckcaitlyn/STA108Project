@@ -1,0 +1,603 @@
+---
+title: "Regression Analysis Project"
+author: "Caitlyn Koyabu"
+date: "2023-12-05"
+output: output=github_document
+---
+```{r}
+library(MASS)
+library(leaps)
+library(readr)
+library(faraway)
+```
+
+```{r}
+setwd("~/Downloads")
+
+countries <- read.csv("countries.csv") 
+
+# The total sample size
+n <- nrow(countries) 
+
+# Set a random seed for reproducing. Change it to a different number.
+set.seed(109) 
+
+# Get a random sample of size 80% * n from 1:n (the row indices)
+subset_id <- sample(n, 0.8*n) 
+
+# Access the subset data by row indices and save the data in a new data set
+## Make sure to save it in a new data set or you will be still using the whole data set
+countries_subset <- countries[subset_id, ] 
+```
+
+
+```{r}
+#we are taking the simple linear regression for each of the predictor variables and doing residual analysis from it
+
+#scatter plot with all the predictors vs response
+# List of predictor variables
+predictor_vars <- c("LandArea", "Population", "Rural", "Health", "Internet", "BirthRate", "ElderlyPop", "CO2","GDP",  "Cell")
+
+par(mfrow = c(3,3))
+
+# Loop through each predictor and create scatter plot
+for (predictor in predictor_vars) {
+  plot(countries_subset[[predictor]], countries_subset$LifeExpectancy,
+       xlab = predictor, ylab = "Life Expectancy", main = paste("Scatter Plot of", predictor, "vs. Life Expectancy"))
+   abline(lm(countries_subset$LifeExpectancy~countries_subset[[predictor]]), col = "red")
+}
+
+#residual vs fitted plots
+for (i in seq_along(predictor_vars)) {
+  predictor <- predictor_vars[i]
+  temp_data <- data.frame(predictor = countries_subset[[predictor]], LifeExpectancy = countries_subset$LifeExpectancy)
+  
+  # Fit a simple linear regression model
+  temp_model <- lm(LifeExpectancy ~ predictor, data = temp_data)
+  
+  # Residuals vs. Fitted plot
+  plot(temp_model, which = 1, main = paste("Residuals vs. Fitted for", predictor),
+       pch = 16, cex = 0.7, cex.main = 1)
+}
+
+# Loop through each predictor and create Q-Q plot
+for (predictor in predictor_vars) {
+  qqnorm(resid(lm(LifeExpectancy ~ countries_subset[[predictor]], data = countries_subset)), 
+         main = paste("Q-Q Plot for", predictor))
+  qqline(resid(lm(LifeExpectancy ~ countries_subset[[predictor]], data = countries_subset)), col = 2)
+}
+
+# Reset plotting parameters to default
+par(mfrow = c(1, 1), mar = c(5, 4, 4, 2) + 0.1)
+
+#Analysis:
+#area - nonlinearity, nonconstant variance,nonnormality -> transform y
+#pop - nonlinearity, nonconstant variance, nonnormality -> transform y
+#rural - linearity, nonconstant variance, nonnomarlity -> ?
+#health - linearity, nonconstant variance,nonnormality -> transform y
+#internet - nonlinearity, nonconstant variance, nonnormality -> transform y
+#birthrate - nonlinearity, nonconstant variance, normality -> transform y
+#elderly - nonlinearity, nonconstant variance, normality -> transform y
+#co2 - nonlinearity, nonconstant variance, nonnormality -> transform y
+#gdp - nonlinearity, nonconstant variance, nonnormality -> transform y
+#cell - nonlinearity, nonconstant variance, normality -> transform y
+```
+
+
+```{r}
+par(mfrow = c(2,2))
+
+#remove outliers
+#interquartile range method
+remove_outliers <- function(x) {
+  non_missing_values <- x[!is.na(x)]
+  q <- quantile(non_missing_values, c(0.25, 0.75), na.rm = TRUE)
+  iqr <- q[2] - q[1]
+  lower_bound <- q[1] - 1.5 * iqr
+  upper_bound <- q[2] + 1.5 * iqr
+  outliers <- x < lower_bound | x > upper_bound
+  x[outliers] <- NA
+  return(x)
+}
+
+#loop through each predictor and remove outliers
+for (predictor in predictor_vars) {
+  countries_subset[[predictor]] <- remove_outliers(countries_subset[[predictor]])
+}
+
+#rebuild model after removing outliers
+model_without_outliers <- lm(LifeExpectancy~LandArea+Population+Rural+Health+Internet+BirthRate+ElderlyPop+CO2+GDP+Cell, data = countries_subset)
+summary(model_without_outliers)
+plot(model_without_outliers, which = 1:2)
+
+#from analysis - removing the outliers helped the plots look better.
+
+#Analysis:
+#area - nonlinearity, constant variance, nonnormality ->
+#pop - nonlinearity, constant variance, nonnormality ->
+#rural - linearity, nonconstant variance, nonnomarlity ->
+#health - linearity, constant variance,nonnormality ->
+#internet - nonlinearity, nonconstant variance, nonnormality -> transform y
+#birthrate - nonlinearity, constant variance, nonnormality -> transform x
+#elderly - nonlinearity, nonconstant variance, nonnormality ->
+#co2 - nonlinearity, nonconstant variance, nonnormality -> transform y
+#gdp - nonlinearity, nonconstant variance, nonnormality -> transform y
+#cell - nonlinearity, nonconstant variance, normality -> transform y
+```
+
+
+```{r}
+# running this again to reset the graphs to be what is expected
+par(mfrow = c(3,3))
+# Loop through each predictor and create scatter plot
+for (predictor in predictor_vars) {
+  plot(countries_subset[[predictor]], countries_subset$LifeExpectancy,
+       xlab = predictor, ylab = "Life Expectancy", main = paste("Scatter Plot of", predictor, "vs. Life Expectancy"))
+   abline(lm(countries_subset$LifeExpectancy~countries_subset[[predictor]]), col = "red")
+}
+
+#residual vs fitted plots
+for (i in seq_along(predictor_vars)) {
+  predictor <- predictor_vars[i]
+  temp_data <- data.frame(predictor = countries_subset[[predictor]], LifeExpectancy = countries_subset$LifeExpectancy)
+  
+  # Fit a simple linear regression model
+  temp_model <- lm(LifeExpectancy ~ predictor, data = temp_data)
+  
+  # Residuals vs. Fitted plot
+  plot(temp_model, which = 1, main = paste("Residuals vs. Fitted for", predictor),
+       pch = 16, cex = 0.7, cex.main = 1)
+}
+
+# Loop through each predictor and create Q-Q plot
+for (predictor in predictor_vars) {
+  qqnorm(resid(lm(LifeExpectancy ~ countries_subset[[predictor]], data = countries_subset)), 
+         main = paste("Q-Q Plot for", predictor))
+  qqline(resid(lm(LifeExpectancy ~ countries_subset[[predictor]], data = countries_subset)), col = 2)
+}
+
+# Reset plotting parameters to default
+par(mfrow = c(1, 1), mar = c(5, 4, 4, 2) + 0.1)
+```
+
+
+```{r}
+#look at scatter plots and take summary to see the p-value
+modelarea <- lm(LifeExpectancy~LandArea, data = countries_subset)
+summary(modelarea)
+
+modelpopulation <- lm(LifeExpectancy~Population, data = countries_subset)
+summary(modelpopulation)
+
+modelrural <- lm(LifeExpectancy~Rural, data = countries_subset)
+summary(modelrural)
+
+modelhealth <- lm(LifeExpectancy~Health, data = countries_subset)
+summary(modelhealth)
+
+modelinternet <- lm(LifeExpectancy~Internet, data = countries_subset)
+summary(modelinternet)
+
+modelbirthrate <- lm(LifeExpectancy~BirthRate, data = countries_subset)
+summary(modelbirthrate)
+
+modelelderlypop <- lm(LifeExpectancy~ElderlyPop, data = countries_subset)
+summary(modelelderlypop)
+
+modelco2 <- lm(LifeExpectancy~CO2, data = countries_subset)
+summary(modelco2)
+
+modelgdp<- lm(LifeExpectancy~GDP, data = countries_subset)
+summary(modelgdp)
+
+modelcell <- lm(LifeExpectancy~Cell, data = countries_subset)
+summary(modelcell)
+# inlcude landarea, rural, health, internet, birthrate, elderlypop, co2, gdp, cell
+```
+
+
+```{r}
+par(mfrow = c(2,2))
+
+#create multiple regression model
+model <- lm(LifeExpectancy~LandArea+Population+Rural+Health+Internet+BirthRate+ElderlyPop+CO2+GDP+Cell, data = countries_subset)
+model
+
+plot(model, which = 1:2)
+summary(model)
+```
+
+
+```{r}
+#multicollinearity
+modelvif2 <- lm(LifeExpectancy~LandArea+Population+Rural+Health+Internet+BirthRate+ElderlyPop+CO2+GDP+Cell, data = countries_subset)
+vif(modelvif2)
+
+#conclusion
+#landarea, population, rural, health, internet, co2, gdp, cell is good
+#birthrate, elderlypop, are moderately problematic
+```
+
+
+```{r}
+#transforming the y variable of the modelwithoutoutliers and seeing if it helps the models
+par(mfrow = c(3,3))
+#possible transformations of outcome variable
+#fit a linear regression model for life expectancy on predictor variables
+
+box_cox_res <- boxcox(model, plotit = TRUE, lambda = seq(-7, 7, 1/10))
+
+#extract lambda value
+lambda <- box_cox_res$x[which.max(box_cox_res$y)]
+print(paste("The optimal lambda is ", lambda))
+
+model_trans_3 <- lm(LifeExpectancy^3~LandArea+Population+Rural+Health+Internet+BirthRate+ElderlyPop+CO2+GDP+Cell, data = countries_subset)
+plot(model_trans_3, which = 1:2)
+summary(model_trans_3)
+
+#Linearity - From the Residuals vs. Fitted plot, the model assumptions are violated because the red line seems to curve and seems to deviate from the 0 line, which means we can't assume linearity.
+#Constant Variance - From the Residuals vs. Fitted plot, the model assumpton seems to hold. It looks better than the first model. Transformed model constant variance looks better and seems to not have patterns.
+#Normality - From the Normal QQ plot, the model assumption seems to hold true since most of the values lay on the regression line so we can assume normality.
+
+
+model_trans_4.1 <- lm(LifeExpectancy^4.1~LandArea+Population+Rural+Health+Internet+BirthRate+ElderlyPop+CO2+GDP+Cell, data = countries_subset)
+plot(model_trans_4.1, which = 1:2)
+summary(model_trans_4.1)
+
+#Linearity - From the Residuals vs. Fitted plot, the model assumptions could be assumed and can hold. It looks better transformed than when it did before it was transformed. most of the plots are on line and doesn't curve as much than it did for the first plot.
+#Constant Variance - From the Residuals vs. Fitted plot, the model assumpton seems to hold.Transformed model constant variance looks better and seems to not have patterns.
+#Normality - From the Normal QQ plot, the model assumption seems to hold true since most of the values lay on the regression line so we can assume normality.
+
+model_trans_2.7 <- lm(LifeExpectancy^2.7~LandArea+Population+Rural+Health+Internet+BirthRate+ElderlyPop+CO2+GDP+Cell, data = countries_subset)
+plot(model_trans_2.7, which = 1:2)
+summary(model_trans_2.7)
+
+#Linearity - From the Residuals vs. Fitted plot, the model assumptions are violated because the red line seems to curve and seems to devite slightly so it can be argueed it is violated.
+#Constant Variance - From the Residuals vs. Fitted plot, the model assumpton seems to hold. It looks better than the first model. Transformed model constant variance looks better and seems to not have patterns.
+#Normality - From the Normal QQ plot, the model assumption seems to hold true since most of the values lay on the regression line so we can assume normality.
+
+
+#In conclusion, the transformed y value at lambda = 4.1 is the best transformed model out of the model with lambdas = 2.7 and 3.
+
+countries_subset$transformed_LifeExpectancy <- (countries_subset$LifeExpectancy)^4.1
+model_trans_y <- lm(transformed_LifeExpectancy~LandArea+Population+Rural+Health+Internet+BirthRate+ElderlyPop+CO2+GDP+Cell, data = countries_subset)
+summary(model_trans_y)
+plot(model_trans_y, which = 1:2)
+```
+
+
+```{r}
+#scatterplot transformed y with x
+
+# Scatter plot with transformed y and x predictors
+par(mfrow = c(3, 3))
+
+# Loop through each predictor and create scatter plot
+for (predictor in predictor_vars) {
+  if (predictor %in% colnames(countries_subset)) {
+    plot(countries_subset[[predictor]], countries_subset$transformed_LifeExpectancy,
+         xlab = predictor, ylab = "Transformed Life Expectancy",
+         main = paste("Scatter Plot of", predictor, "vs. Transformed Life Expectancy"))
+    abline(lm(transformed_LifeExpectancy ~ countries_subset[[predictor]], data = countries_subset), col = "red")
+  } else {
+    cat("Variable not found:", predictor, "\n")
+  }
+}
+
+# Residuals vs. Fitted plot for transformed model
+par(mfrow = c(3, 3))
+
+# Loop through each predictor and create Residuals vs. Fitted plot
+for (predictor in predictor_vars) {
+  if (predictor %in% colnames(countries_subset)) {
+    temp_data <- data.frame(
+      predictor = countries_subset[[predictor]],
+      transformed_LifeExpectancy= countries_subset$transformed_LifeExpectancy
+    )
+    
+    # Fit a simple linear regression model
+    temp_model <- lm(transformed_LifeExpectancy ~ predictor, data = temp_data)
+    
+    # Residuals vs. Fitted plot
+    plot(temp_model, which = 1, main = paste("Residuals vs. Fitted for", predictor),
+         pch = 16, cex = 0.7, cex.main = 1)
+  } else {
+    cat("Variable not found:", predictor, "\n")
+  }
+}
+
+# Reset plotting parameters to default
+par(mfrow = c(1, 1), mar = c(5, 4, 4, 2) + 0.1)
+
+
+# QQ plots for each predictor
+par(mfrow = c(3, 3))
+
+# Loop through each predictor and create Q-Q plot
+for (predictor in predictor_vars) {
+  if (predictor %in% colnames(countries_subset)) {
+    qqnorm(resid(lm(transformed_LifeExpectancy ~ countries_subset[[predictor]], data = countries_subset)), 
+           main = paste("Q-Q Plot for", predictor))
+    qqline(resid(lm(transformed_LifeExpectancy ~ countries_subset[[predictor]], data = countries_subset)), col = 2)
+  } else {
+    cat("Variable not found:", predictor, "\n")
+  }
+}
+
+# Reset plotting parameters to default
+par(mfrow = c(1, 1), mar = c(5, 4, 4, 2) + 0.1)
+
+#Analysis:
+#area: linearity, constant variance, normality 
+#pop: linearity, constant varinace, nonnormality
+#rural: linearity, constant variance, normality
+#health: linearity, constant variance, nonnormality
+#internet: nonlinearity, nonconstant variance, nonnormality -> transform x
+#birthrate: linearity, nonconstant variance, normality
+#elderly: non linearity, nonconstant variance, nonnormality -> transform x
+#co2: nonlinearity, nonconstant variance, nonnormality -> transform x
+#gdp:nonlinearity, nonconstant variance, nonnormality -> transform x
+#cell: nonlinearity, nonconstant variance, normality -> transform x
+```
+
+
+```{r}
+#transformation of x
+
+
+#internet
+par(mfrow = c(3,3))
+
+model_internet_0.5 <- lm(LifeExpectancy~I(Internet^0.5), data = countries_subset)
+plot(model_internet_0.5, which =1:2)
+#linearity - linearity not met. Model assumptions are violated. 
+#constant variance - Model assumptions are violated. There is a pattern. 
+#normality - violates
+
+model_internet_0.3 <- lm(LifeExpectancy~I(Internet^0.3), data = countries_subset)
+plot(model_internet_0.3, which =1:2)
+#linearity - can still assume linearity as it is mostly on 0 line. 
+#constant variance - non constant variance. Model assumptions are violated. There is a pattern.
+#normality - violates
+
+model_internet_0.8<- lm(LifeExpectancy~I(Internet^0.8), data = countries_subset)
+plot(model_internet_0.8, which =1:2)
+#linearity - Model assumptions are violated. The line curves. Nonlinearity.
+#constant variance - Pattern so nonconstant variance. Model assumptions are violted
+#normality - violates
+#internet best is 0.3. for transformation of x. 
+
+
+#elderly 
+model_elderly_neg0.2 <- lm(LifeExpectancy~I(ElderlyPop^-0.2), data = countries_subset)
+plot(model_elderly_neg0.2, which =1:2)
+#linearity - Model assumptions are violated. Nonlinearity.
+#constant variance - violated. There is a pattern. we can't assume constant variance.
+#normality - violates
+
+model_elderly_neg0.3 <- lm(LifeExpectancy~I(ElderlyPop^-0.3), data = countries_subset)
+plot(model_elderly_neg0.3, which =1:2)
+#linearity - violates, but better than the other plots and better than before
+#constant variance - violated
+#normality - violated
+
+model_elderly_neg0.35 <-  lm(LifeExpectancy~I(ElderlyPop^-0.35), data = countries_subset)
+plot(model_elderly_neg0.35, which =1:2)
+#linearity - violated.
+#constant variance - Pattern so nonconstant variance. Model assumptions are violted
+#normality - violates
+#elderly best lambda is -0.3 for transformation of x. 
+
+
+#co2
+model_co2_0.4 <- lm(LifeExpectancy~I(CO2^0.4), data = countries_subset)
+plot(model_co2_0.4, which =1:2)
+#linearity - violates
+#constant variance - constant variance assumed
+#normality - violates
+
+model_co2_0.1 <- lm(LifeExpectancy~I(CO2^0.1), data = countries_subset)
+plot(model_co2_0.1, which =1:2)
+#linearity - can still assume linearity as it is mostly on 0 line. -> slightly curved tho
+#constant variance - can assume
+#normality - violates
+
+model_co2_log <- lm(LifeExpectancy~log(CO2), data = countries_subset)
+plot(model_co2_log, which =1:2)
+#linearity - can still assume linearity as it is mostly on 0 line. 
+#constant variance - can assume
+#normality - violates
+#co2 best is log(co2) for transformation of x. 
+
+
+#gdp
+model_gdp_0.6 <- lm(LifeExpectancy~I(GDP^0.6), data = countries_subset)
+plot(model_gdp_0.6, which =1:2)
+#linearity - violates
+#constant variance - violates
+#normality - violates
+
+model_gdp_0.5 <- lm(LifeExpectancy~I(GDP^0.5), data = countries_subset)
+plot(model_gdp_0.5, which =1:2)
+#linearity - best one but still violates 
+#constant variance - violates
+#normality - violates
+
+model_gdp_log <- lm(LifeExpectancy~log(GDP), data = countries_subset)
+plot(model_gdp_log, which =1:2)
+#linearity - best one but still violates, can argue it could.
+#constant variance - can argue both ways.
+#normality - violates
+#gdp best is log for x transformation. 
+
+
+#cell
+model_cell_1.2 <- lm(LifeExpectancy~I(Cell^1.2), data = countries_subset)
+plot(model_cell_1.2, which =1:2)
+#linearity - violates
+#constant variance - violates
+#normality - violates
+
+model_cell_0.6 <- lm(LifeExpectancy~I(Cell^0.6), data = countries_subset)
+plot(model_cell_0.6, which =1:2)
+#linearity - violates
+#constant variance - violates
+#normality - violates
+
+model_cell_0.8 <- lm(LifeExpectancy~I(Cell^0.8), data = countries_subset)
+plot(model_cell_0.8, which =1:2)
+#linearity - best one but still violates 
+#constant variance - violates
+#normality - violates
+#cell best is 0.6 for transformation of x. 
+
+
+#conclusion: 
+#internet best is 0.3. for transformation of x. 
+#elderly best lambda is -0.3 for transformation of x. 
+#co2 best is log(co2) for transformation of x. 
+#gdp best is log for x transformation. 
+#cell best is 0.6 for transformation of x. 
+
+#put in the graphs
+countries_subset$transformed_Internet <- (countries_subset$Internet^0.3)
+countries_subset$transformed_ElderlyPop <- (countries_subset$ElderlyPop^-0.3)
+countries_subset$transformed_CO2 <- log(countries_subset$CO2)
+countries_subset$transformed_GDP <- log(countries_subset$GDP)
+countries_subset$transformed_Cell <- (countries_subset$Cell^0.6)
+
+#model with transformed y and x's 
+model_trans_y_x <- lm(transformed_LifeExpectancy~LandArea+Population+Rural+Health+transformed_Internet+BirthRate+transformed_ElderlyPop+transformed_CO2+transformed_GDP+transformed_Cell, data = countries_subset)
+summary(model_trans_y_x)
+
+#plot
+plot(model_trans_y_x, which = 1:2)
+```
+
+
+```{r}
+#forwards selection, exhaustive and backwards elimination
+model_best_subset<- regsubsets(transformed_LifeExpectancy~LandArea+Population+Rural+Health+transformed_Internet+BirthRate+transformed_ElderlyPop+transformed_CO2+transformed_GDP+transformed_Cell, data = countries_subset, method = "exhaustive")
+model_forward<- regsubsets(transformed_LifeExpectancy~LandArea+Population+Rural+Health+transformed_Internet+BirthRate+transformed_ElderlyPop+transformed_CO2+transformed_GDP+transformed_Cell, data = countries_subset, method = "forward")
+model_backward<- regsubsets(transformed_LifeExpectancy~LandArea+Population+Rural+Health+transformed_Internet+BirthRate+transformed_ElderlyPop+transformed_CO2+transformed_GDP+transformed_Cell, data = countries_subset, method = "backward")
+
+summary(model_best_subset)
+summary(model_forward)
+summary(model_backward)
+
+par(mfrow=c(2,2))
+summary(model_best_subset)$cp
+summary(model_forward)$cp
+summary(model_backward)$cp
+
+summary(model_best_subset)$adjr2
+summary(model_forward)$adjr2
+summary(model_backward)$adjr2
+
+#best model 5 predictors (cp): 
+#best model with the predictors from exhaustive:landarea, rural health, birthrate, transformedgdp
+#best model with the predictors from forward:landarea, rural health, birthrate, transformedgdp 
+#best model with the predictors from backward:landarea, rural, health, birthrate, transformedgdp 
+
+# Remove rows with missing values
+countries_subset_no_missing <- na.omit(countries_subset)
+
+# Fit models without missing values
+intercept_only <- lm(LifeExpectancy ~ 1, data = countries_subset_no_missing)
+model_all <- lm(LifeExpectancy ~ LandArea + Rural + Health + BirthRate + transformed_GDP, data = countries_subset_no_missing)
+
+# Perform stepwise regression for order
+stepwise <- step(intercept_only, direction = 'both', scope = formula(model_all), trace = 0)
+stepwise$anova
+stepwise$coefficients
+#best order is BirthRate, Health, LandArea, Rural
+
+#best model 7 (adjr2):
+#best model with the predictors from exhaustive:landarea,  , rural, health, birthrate, ,transformed_gdp, transformed_internet, transformed_CO2
+#best model with the predictors from forward:landarea,  rural, health, birthrate, ,transformed_gdp, transformed_internet, transformed_CO2
+#best model with the predictors from backward:landarea,  rural, health, birthrate, ,transformed_gdp, transformed_internet, transformed_CO2
+
+# Remove rows with missing values
+countries_subset_no_missing <- na.omit(countries_subset)
+
+# Fit models without missing values
+intercept_only <- lm(LifeExpectancy ~ 1, data = countries_subset_no_missing)
+model_all <- lm(LifeExpectancy ~ LandArea + Rural + Health+transformed_Internet+BirthRate+transformed_CO2 + transformed_GDP, data = countries_subset_no_missing)
+
+# Perform stepwise regression for order
+stepwise <- step(intercept_only, direction = 'both', scope = formula(model_all), trace = 0)
+stepwise$anova
+stepwise$coefficients
+#Order from radj2 -> BirthRate, Health, LandArea, Rural
+
+
+
+
+```
+
+
+```{r}
+#running diagnostics
+par(mfrow = c(2,2))
+
+final_model <- lm(transformed_LifeExpectancy~BirthRate+Health+LandArea+Rural, data = countries_subset)
+plot(final_model, which = 1:2)
+
+#analysis
+#linearity - values are mostly on the zero line, model assumptions are not violated. We can assume linearity.
+#constant variance - there is a good spread on the plot. We can assume constant variance.
+#Normality - points are mostly on the regression line, however there are deviations in the tails. Can argue it can violate and doesn't violate. 
+```
+
+
+```{r}
+#transform y again
+par(mfrow = c(3,3))
+
+#possible transformations of outcome variable
+#fit a linear regression model for life expectancy on predictor variables
+box_cox_res <- boxcox(final_model, plotit = TRUE, lambda = seq(-7, 7, 1/10))
+
+#extract lambda value
+lambda <- box_cox_res$x[which.max(box_cox_res$y)]
+print(paste("The optimal lambda is ", lambda))
+
+#perform transformations
+
+model_trans2_log <- lm(log(transformed_LifeExpectancy)~BirthRate+Health+LandArea+Rural, data = countries_subset)
+plot(model_trans2_log, which = 1:2)
+summary(model_trans2_log)
+#Linearity - violates
+#Constant Variance - questionable
+#Normality - violates
+
+model_trans2_sqrt <- lm(sqrt(transformed_LifeExpectancy)~BirthRate+Health+LandArea+Rural, data = countries_subset)
+plot(model_trans2_sqrt, which = 1:2)
+summary(model_trans2_sqrt)
+#Linearity - violates 
+#Constant Variance - From the Residuals vs. Fitted plot, the model assumpton seems to hold.Transformed model constant variance looks better and seems to not have patterns.
+#Normality - violates
+
+model_trans2_0.9 <- lm(transformed_LifeExpectancy^0.9~BirthRate+Health+LandArea+Rural, data = countries_subset)
+plot(model_trans2_0.9, which = 1:2)
+summary(model_trans2_0.9)
+#Linearity - good, can assume linearity
+#Constant Variance - can assume constant variance
+#Normality - From the Normal QQ plot, still seems violating
+
+#best lambda is 0.9
+
+countries_subset$transformed_LifeExpectancy2 <- (countries_subset$transformed_LifeExpectancy)^0.9
+
+#create model with new transformed variable
+model_trans2_y <- lm(transformed_LifeExpectancy2~BirthRate+Health+LandArea+Rural, data = countries_subset)
+summary(model_trans2_y)
+
+#run diagnostis again
+plot(model_trans2_y, which = 1:2)
+```
+
+
+```{r}
+
+```
